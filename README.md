@@ -1,4 +1,4 @@
-# Laravel 12 – User Impersonation System
+# PHP_Laravel12_Query_Detector
 ## Goal
 
 Build a Laravel project that detects inefficient database queries (N+1 problems) during development and teaches how to fix them using Eloquent eager loading and best practices.
