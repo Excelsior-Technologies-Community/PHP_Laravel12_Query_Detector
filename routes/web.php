@@ -74,3 +74,10 @@ Route::get('/posts/{post:slug}', [PostController::class, 'show'])
 
 Route::get('/categories/{category:slug}', [PostController::class, 'byCategory'])
      ->name('categories.posts');
+
+
+Route::get('/benchmark', [PostController::class, 'benchmark'])
+    ->name('benchmark');
+
+Route::get('/optimization-report', [PostController::class, 'optimizationReport'])
+    ->name('optimization.report');
