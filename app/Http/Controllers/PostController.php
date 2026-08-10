@@ -8,7 +8,8 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\PostExport;
-
+use Illuminate\Support\Facades\DB;
+use App\Models\Comment;
 class PostController extends Controller
 {
     /**
@@ -240,4 +241,133 @@ class PostController extends Controller
             'stats'
         ));
     }
+
+    public function benchmark()
+{
+    // N+1 Query Benchmark
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $start = microtime(true);
+
+    $posts = Post::all();
+
+    foreach ($posts as $post) {
+        $post->user;
+        $post->category;
+        $post->comments->each(function ($comment) {
+            $comment->user;
+        });
+    }
+
+    $n1Time = (microtime(true) - $start) * 1000;
+    $n1Queries = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    // Eager Loading Benchmark
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $start = microtime(true);
+
+    $posts = Post::with([
+        'user',
+        'category',
+        'comments.user'
+    ])->get();
+
+    foreach ($posts as $post) {
+        $post->user;
+        $post->category;
+        $post->comments->each(function ($comment) {
+            $comment->user;
+        });
+    }
+
+    $eagerTime = (microtime(true) - $start) * 1000;
+    $eagerQueries = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    // Optimized Query Benchmark
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $start = microtime(true);
+
+    $posts = Post::with([
+        'user:id,name',
+        'category:id,name',
+    ])
+        ->withCount('comments')
+        ->get();
+
+    $optimizedTime = (microtime(true) - $start) * 1000;
+    $optimizedQueries = count(DB::getQueryLog());
+
+    DB::disableQueryLog();
+
+    $results = [
+        'n1' => [
+            'label' => 'N+1 Query',
+            'queries' => $n1Queries,
+            'time' => round($n1Time, 2),
+        ],
+        'eager' => [
+            'label' => 'Eager Loading',
+            'queries' => $eagerQueries,
+            'time' => round($eagerTime, 2),
+        ],
+        'optimized' => [
+            'label' => 'Optimized Query',
+            'queries' => $optimizedQueries,
+            'time' => round($optimizedTime, 2),
+        ],
+    ];
+
+    $improvement = $n1Time > 0
+        ? round((($n1Time - $optimizedTime) / $n1Time) * 100, 2)
+        : 0;
+
+    return view('benchmark', compact(
+        'results',
+        'improvement'
+    ));
+}
+
+public function optimizationReport()
+{
+    $posts = Post::count();
+
+    $commentsPerPost = Comment::whereIn(
+        'post_id',
+        Post::pluck('id')
+    )->count();
+
+    $n1Queries = ($posts * 2) + $commentsPerPost + 1;
+
+    $optimizedQueries = 3;
+
+    $unnecessaryQueries = max(
+        $n1Queries - $optimizedQueries,
+        0
+    );
+
+    $optimizationPercentage = $n1Queries > 0
+        ? round(
+            (($n1Queries - $optimizedQueries) / $n1Queries) * 100,
+            2
+        )
+        : 0;
+
+    return view('optimization-report', compact(
+        'posts',
+        'commentsPerPost',
+        'n1Queries',
+        'optimizedQueries',
+        'unnecessaryQueries',
+        'optimizationPercentage'
+    ));
+}
 }
